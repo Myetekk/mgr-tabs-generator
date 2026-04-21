@@ -11,14 +11,14 @@ from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
 
 class NotesGenerator:
     numbers_on_lines = False
-    dir_name = "tabs"
 
 
 
 
 
     def __init__(self):
-        for i in range(4):
+        gen_num = 2000
+        for i in range(gen_num):
             notes = self.generate_notes(random.randint(1,10))
             chord_spacing = random.randint(50, 70)
             output_name = f"tab_{i}"
@@ -54,9 +54,6 @@ class NotesGenerator:
 
 
     def generate_tab(self, notes, output_name, chord_spacing=50):
-        if not os.path.exists(self.dir_name):  os.makedirs(self.dir_name)
-        if not os.path.exists(self.dir_name+"\\model_a"):  os.makedirs(self.dir_name+"\\model_a")
-        if not os.path.exists(self.dir_name+"\\model_b"):  os.makedirs(self.dir_name+"\\model_b")
         if chord_spacing < 50:  chord_spacing = 50
 
         max_x = max(note['x_pos'] for note in notes) if notes else 100
@@ -191,11 +188,20 @@ class NotesGenerator:
 
 
     def save_files(self, image, output_name, labels_model_a, labels_model_b, notes):
+        dir_name = "..\\dataset"
+        dir_name_image = dir_name+"\\images"
+        dir_name_labels_model_a = dir_name+"\\labels_model_a"
+        dir_name_labels_model_b = dir_name+"\\labels_model_b"
+
         try:
-            image.save(f"{self.dir_name}\\model_a\\{output_name}.png")
-            image.save(f"{self.dir_name}\\model_b\\{output_name}.png")
-            with open(f"{self.dir_name}\\model_a\\{output_name}.txt", "w") as f:  f.write("\n".join(labels_model_a))
-            with open(f"{self.dir_name}\\model_b\\{output_name}.txt", "w") as f:  f.write(labels_model_b)
+            if not os.path.exists(dir_name):  os.makedirs(dir_name)
+            if not os.path.exists(dir_name_image):  os.makedirs(dir_name_image)
+            if not os.path.exists(dir_name_labels_model_a):  os.makedirs(dir_name_labels_model_a)
+            if not os.path.exists(dir_name_labels_model_b):  os.makedirs(dir_name_labels_model_b)
+
+            image.save(f"{dir_name_image}\\{output_name}.png")
+            with open(f"{dir_name_labels_model_a}\\{output_name}.txt", "w") as f:  f.write("\n".join(labels_model_a))
+            with open(f"{dir_name_labels_model_b}\\{output_name}.txt", "w") as f:  f.write(labels_model_b)
 
             print(f"Sukces: {output_name} (Klasy: {[n['fret'] for n in notes]})\n\n")
 
