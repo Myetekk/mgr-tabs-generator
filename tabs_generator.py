@@ -9,20 +9,29 @@ from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
 
 
 
+DATA_DIR = '..\\dataset'
+# DATA_DIR = '..\\testset'
+
+GEN_NUMBER = 100
+
+
+
+
+
 class NotesGenerator:
-    numbers_on_lines = False
 
 
 
 
 
     def __init__(self):
-        gen_num = 2000
-        for i in range(gen_num):
-            notes = self.generate_notes(random.randint(1,10))
-            chord_spacing = random.randint(50, 70)
+        for i in range(GEN_NUMBER):
+            notes = self.generate_notes(random.randint(1,20))
+            chord_spacing = random.randint(100, 300)
+            line_spacing = random.randint(50, 150)
+            numbers_on_lines = random.choice([True, False])
             output_name = f"tab_{i}"
-            self.generate_tab(notes, output_name, chord_spacing)
+            self.generate_tab(notes, output_name, chord_spacing, line_spacing, numbers_on_lines)
 
 
 
@@ -53,14 +62,12 @@ class NotesGenerator:
 
 
 
-    def generate_tab(self, notes, output_name, chord_spacing=50):
-        if chord_spacing < 50:  chord_spacing = 50
-
+    def generate_tab(self, notes, output_name, chord_spacing=50, line_spacing=50, numbers_on_lines=False):
         max_x = max(note['x_pos'] for note in notes) if notes else 100
-        margin_x = chord_spacing  + random.randint(0, 10)
+        margin_x = chord_spacing  + random.randint(0, 100) + random.randint(0, 100) + random.randint(0, 100)
         width = max_x*chord_spacing  + margin_x + random.randint(0, 10)
 
-        line_spacing = int(chord_spacing/2)  + random.randint(0, 10)
+        line_spacing = int(line_spacing/2)  + random.randint(0, 10)
         height = line_spacing*8  + random.randint(0, 10)
 
 
@@ -88,6 +95,29 @@ class NotesGenerator:
 
 
 
+        # rysowanie pionowych linii taktu (barlines)
+        if max_x > 1:
+            current_prob = min(1.0, 0.40 + (max_x * 0.05))
+
+            num_vertical_lines = 0
+            while random.random() < current_prob:
+                num_vertical_lines += 1
+                current_prob /= 1.2
+
+            available_gaps = [int((i + 0.5) * chord_spacing) for i in range(1, max_x)]
+            num_vertical_lines = min(num_vertical_lines, len(available_gaps))
+
+            if num_vertical_lines > 0:
+                selected_gaps = random.sample(available_gaps, num_vertical_lines)
+                y_top = string_y_positions[0]
+                y_bottom = string_y_positions[5]
+
+                line_width = random.randint(2, 5)
+                for gap_x in selected_gaps:
+                    draw.line([(gap_x, y_top), (gap_x, y_bottom)], fill=line_color, width=line_width)
+
+
+
         labels_model_a = []
         chords_model_b = {}
         for note in notes:
@@ -101,7 +131,7 @@ class NotesGenerator:
             y = string_y_positions[string_idx]
             text = str(fret_val)
             bbox = draw.textbbox((x, y), text, font=font, anchor="mm")
-            if not self.numbers_on_lines:
+            if not numbers_on_lines:
                 draw.rectangle([bbox[0] - 2, bbox[1] - 2, bbox[2] + 2, bbox[3] + 2], fill=bg_color)
             draw.text((x, y), text, fill=numbers_color, font=font, anchor="mm")
 
@@ -188,20 +218,15 @@ class NotesGenerator:
 
 
     def save_files(self, image, output_name, labels_model_a, labels_model_b, notes):
-        dir_name = "..\\dataset"
-        dir_name_image = dir_name+"\\images"
-        dir_name_labels_model_a = dir_name+"\\labels_model_a"
-        dir_name_labels_model_b = dir_name+"\\labels_model_b"
-
         try:
-            if not os.path.exists(dir_name):  os.makedirs(dir_name)
-            if not os.path.exists(dir_name_image):  os.makedirs(dir_name_image)
-            if not os.path.exists(dir_name_labels_model_a):  os.makedirs(dir_name_labels_model_a)
-            if not os.path.exists(dir_name_labels_model_b):  os.makedirs(dir_name_labels_model_b)
+            if not os.path.exists(DATA_DIR):  os.makedirs(DATA_DIR)
+            # if not os.path.exists(IMAGE_DIR):  os.makedirs(IMAGE_DIR)
+            # if not os.path.exists(LABEL_DIR_A):  os.makedirs(LABEL_DIR_A)
+            # if not os.path.exists(LABEL_DIR_B):  os.makedirs(LABEL_DIR_B)
 
-            image.save(f"{dir_name_image}\\{output_name}.png")
-            with open(f"{dir_name_labels_model_a}\\{output_name}.txt", "w") as f:  f.write("\n".join(labels_model_a))
-            with open(f"{dir_name_labels_model_b}\\{output_name}.txt", "w") as f:  f.write(labels_model_b)
+            image.save(f"{DATA_DIR}\\{output_name}.png")
+            with open(f"{DATA_DIR}\\{output_name}_a.txt", "w") as f:  f.write("\n".join(labels_model_a))
+            with open(f"{DATA_DIR}\\{output_name}_b.txt", "w") as f:  f.write(labels_model_b)
 
             print(f"Sukces: {output_name} (Klasy: {[n['fret'] for n in notes]})\n\n")
 
