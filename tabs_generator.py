@@ -136,7 +136,7 @@ class NotesGenerator:
             if not numbers_on_lines:
                 draw.rectangle([bbox[0] - 2, bbox[1] - 2, bbox[2] + 2, bbox[3] + 2], fill=bg_color)
 
-            stroke_width = random.choices([0, 1, 2], weights=[0.2, 0.6, 0.2])[0]
+            stroke_width = random.choice([0, 1])
             draw.text((x, y), text, fill=numbers_color, font=font, anchor="mm", stroke_width=stroke_width,
                       stroke_fill=numbers_color)
 
