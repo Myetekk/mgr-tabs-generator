@@ -15,7 +15,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
 DATA_DIR = '..\\dataset'
 # DATA_DIR = '..\\testset'
 
-GEN_NUMBER = 25000
+GEN_NUMBER = 30000
 
 
 
@@ -29,10 +29,27 @@ class NotesGenerator:
 
 
     def generate_single_tab(self, index):
-        notes = self.generate_notes(random.randint(1, 16))
+        # Mniejsze odstępy, żeby zmieścić więcej akordów na 1024 pikselach
+        chord_spacing = random.randint(50, 150)
+        line_spacing = random.randint(30, 80)
 
-        chord_spacing = random.randint(100, 300)
-        line_spacing = random.randint(50, 200)
+        max_allowed_width = 1000
+        notes = []
+        current_x = 1
+
+        # Generujemy nuty, dopóki fizycznie mieszczą się na klatce 1000px!
+        while current_x * chord_spacing < max_allowed_width:
+            chord_number = random.choices([1, 2, 3, 4, 5, 6], [100, 40, 15, 5, 2, 1])[0]
+            strings = random.sample([1, 2, 3, 4, 5, 6], chord_number)
+
+            for string in strings:
+                fret = random.randint(0, 24)
+                notes.append({'string': string, 'fret': fret, 'x_pos': current_x})
+
+            current_x += 1
+            if current_x > 25: break  # Zabezpieczenie przed nieskończoną pętlą
+
+        notes.sort(key=lambda x: (x['x_pos'], x['string']))
 
         numbers_on_lines = random.choice([True, False])
         output_name = f"tab_{index}"
@@ -44,31 +61,15 @@ class NotesGenerator:
 
 
 
-    def generate_notes(self, chord_length):
-        notes = []
-        try:
-            for i in range(chord_length):  # akordy
-                chord_number = random.choices([1, 2, 3, 4, 5, 6], [100, 40, 15, 5, 2, 1])[0]
-                strings = [1, 2, 3, 4, 5, 6]
-                string = random.sample(strings, chord_number)
-
-                for j in range(chord_number):  # chwyty
-                    fret = random.randint(0, 24)
-                    notes.append({'string': string[j], 'fret': fret, 'x_pos': (i + 1)})
-
-            notes.sort(key=lambda x: (x['x_pos'], x['string']))
-        except Exception as e:
-            print(f"Error in generate_notes: {e}")
-
-        return notes
-
-
-
     def generate_tab(self, notes, output_name, chord_spacing=50, line_spacing=50, numbers_on_lines=False):
         max_x = max(note['x_pos'] for note in notes) if notes else 100
         margin_x = chord_spacing + random.randint(0, 100)
         width = max_x * chord_spacing + margin_x + random.randint(0, 10)
-        height = line_spacing * 8 + random.randint(0, 50)
+
+        strict_tab_height = 5 * line_spacing
+        top_margin = random.randint(5, line_spacing * 2)
+        bottom_margin = random.randint(5, line_spacing * 2)
+        height = strict_tab_height + top_margin + bottom_margin
 
         # Losowanie kolorów
         bg_color = (random.randint(235, 255), random.randint(235, 255), random.randint(235, 255))
@@ -92,10 +93,9 @@ class NotesGenerator:
         except:
             font = ImageFont.truetype("arial.ttf", font_size)
 
-        start_y = (height - (5 * line_spacing)) // 2
-        string_y_positions = [start_y + i * line_spacing for i in range(6)]
+        string_y_positions = [top_margin + i * line_spacing for i in range(6)]
 
-        line_width = random.randint(2, 7)
+        line_width = random.randint(2, 6)
         for y in string_y_positions:
             draw.line([(0, y), (width, y)], fill=line_color, width=line_width)
 
@@ -116,7 +116,7 @@ class NotesGenerator:
                 y_bottom = string_y_positions[5]
 
                 for gap_x in selected_gaps:
-                    draw.line([(gap_x, y_top), (gap_x, y_bottom)], fill=line_color, width=line_width+random.randint(-1, 2))
+                    draw.line([(gap_x, y_top), (gap_x, y_bottom)], fill=line_color, width=line_width + random.randint(-1, 2))
 
         labels_model_a = []
         chords_model_b = {}
@@ -131,14 +131,12 @@ class NotesGenerator:
             y = string_y_positions[string_idx] + y_offset
             text = str(fret_val)
 
-            # Bezpieczny bbox dla nowszego Pillow
             bbox = draw.textbbox((x, y), text, font=font, anchor="mm")
 
             if not numbers_on_lines:
                 draw.rectangle([bbox[0] - 2, bbox[1] - 2, bbox[2] + 2, bbox[3] + 2], fill=bg_color)
 
-            # Losowo lekko pogrubiamy (stroke)
-            stroke_width = random.choice([0, 1])
+            stroke_width = random.choices([0, 1, 2], weights=[0.2, 0.6, 0.2])[0]
             draw.text((x, y), text, fill=numbers_color, font=font, anchor="mm", stroke_width=stroke_width,
                       stroke_fill=numbers_color)
 
@@ -150,6 +148,7 @@ class NotesGenerator:
             y_center = y / height
             labels_model_a.append(f"{class_id} {x_center:.6f} {y_center:.6f} {w_box:.6f} {h_box:.6f}")
 
+            # Etykietowanie CRNN (dla Twojego obecnego modelu B)
             if x not in chords_model_b:
                 chords_model_b[x] = []
             chords_model_b[x].append(f"{string_num}:{fret_val}")
@@ -161,10 +160,8 @@ class NotesGenerator:
             sequence_steps_model_b.append(step_str)
         labels_model_b = " | ".join(sequence_steps_model_b)
 
-        # Dodanie zakłóceń
+        # Dodanie zakłóceń i zapis
         image = self.apply_noise(image, 0.6)
-
-        # Zapis plików
         self.save_files(image, output_name, labels_model_a, labels_model_b)
 
 
