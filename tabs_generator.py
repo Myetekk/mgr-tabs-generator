@@ -13,7 +13,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
 DATA_DIR = '..\\dataset'
 # DATA_DIR = '..\\testset'
 
-GEN_NUMBER = 100
+GEN_NUMBER = 40000
 
 
 
@@ -85,21 +85,22 @@ class NotesGenerator:
             font = ImageFont.truetype("arial.ttf", int(line_spacing))
 
         try:
-            measure_font_size = max(10, int(line_spacing * random.uniform(0.4, 0.7)))
+            measure_font_size = max(10, int(line_spacing * random.uniform(0.4, 0.7))) + random.randint(-2, 2)
             measure_font = ImageFont.truetype(random.choice(fonts), measure_font_size)
         except:
-            measure_font = ImageFont.truetype("arial.ttf", 12)
+            measure_font_size = 12 + random.randint(-2, 2)
+            measure_font = ImageFont.truetype("arial.ttf", measure_font_size)
 
         measure_color = (random.randint(50, 180), random.randint(50, 180), random.randint(50, 180))
 
         try:
-            art_font_size = max(12, int(line_spacing * random.uniform(0.7, 1.4)))
+            art_font_size = max(12, int(line_spacing * random.uniform(0.7, 1.4))) + random.randint(-2, 2)
             art_font = ImageFont.truetype(random.choice(fonts), art_font_size)
-            small_art_font = ImageFont.truetype(random.choice(fonts), max(10, int(art_font_size * 0.65)))
+            # small_art_font = ImageFont.truetype(random.choice(fonts), max(10, int(art_font_size * 0.65)))
         except:
-            art_font_size = 16
+            art_font_size = 16 + random.randint(-2, 2)
             art_font = ImageFont.truetype("arial.ttf", art_font_size)
-            small_art_font = ImageFont.truetype("arial.ttf", 10)
+            # small_art_font = ImageFont.truetype("arial.ttf", 10)
 
         string_y_positions = [top_margin + i * line_spacing for i in range(6)]
         line_width = random.randint(1, 3)
@@ -118,7 +119,7 @@ class NotesGenerator:
         measure_counter = random.randint(1, 200)
         barline_x_positions = []
         if max_x > 1:
-            current_prob = min(1.0, 0.20 + (max_x * 0.02))  # Zmniejszono prawdopodobieństwo kresek taktów
+            current_prob = min(1.0, 0.20 + (max_x * 0.02))
             num_vertical_lines = 0
             while random.random() < current_prob:
                 num_vertical_lines += 1
@@ -160,13 +161,13 @@ class NotesGenerator:
 
         marker_over_strings = random.random() < 0.5
 
-        # Zmniejszono prawdopodobieństwo markerów (z 0.4 na 0.15)
+        # markery
         if random.random() < 0.15:
             num_highlights = random.randint(1, 2)
             for _ in range(num_highlights):
                 hx_start = random.randint(int(chord_spacing), int(width * 0.7))
                 hx_end = hx_start + random.randint(int(chord_spacing), int(chord_spacing * 4))
-                highlight_colors = [(255, 245, 200, 130), (255, 230, 210, 130), (220, 240, 255, 130)]
+                highlight_colors = [random.randint(130, 255), random.randint(130, 255), random.randint(130, 255)]
                 h_color = random.choice(highlight_colors)
 
                 if random.random() < 0.5:
@@ -191,7 +192,6 @@ class NotesGenerator:
 
         # Numery taktów
         for gap_x in barline_x_positions:
-            # Zmniejszono prawdopodobieństwo numerów taktów (z 0.8 na 0.4)
             if random.random() < 0.4:
                 offset_x = random.randint(-30, 0)
                 offset_y = random.randint(-10, 5)
@@ -207,7 +207,7 @@ class NotesGenerator:
             grouped_notes[x].append(note)
 
         for x, group in grouped_notes.items():
-            # Rysowanie laseczek rytmicznych (z 0.65 na 0.3)
+            # Rysowanie laseczek rytmicznych
             if random.random() < 0.30:
                 bottom_string_idx = max(n['string'] for n in group) - 1
                 y_start = string_y_positions[bottom_string_idx] + line_spacing * 0.8
@@ -215,7 +215,7 @@ class NotesGenerator:
                 y_end = string_y_positions[5] + line_spacing * random.uniform(1.5, 2.7)
                 y_end = min(y_end, height - random.randint(5, 15))
 
-                draw_final.line([(x, y_start), (x, y_end)], fill=line_color, width=max(1, line_width - 1))
+                draw_final.line([(x, y_start), (x, y_end)], fill=line_color, width=max(1, line_width+random.randint(-2, 2)))
 
                 if random.random() < 0.6:
                     beam_length = chord_spacing * random.uniform(0.6, 1.0)
@@ -225,26 +225,27 @@ class NotesGenerator:
                     draw_final.arc([x, y_end - 15, x + 20, y_end + 15], start=180, end=270, fill=line_color,
                                    width=max(1, line_width))
 
-            # Artykulacja na górze (z 0.4 na 0.15)
+            # Artykulacja na górze
             if random.random() < 0.15:
                 art_text = random.choice(
                     ["P.M.", "H", "P", "C#5", "C5", "D5", "(E5)", "Dsus2", "Cmaj7", "B7sus4", "1/4", "1/2", "Full",
                      "1 1/2", "PB", "T", "S", "sl.", "v", "vib", "Tr.", "harm.", "N.H.", "A.H.", "P.H.", "T.H.",
                      "w/bar"])
 
+                x_art = x + random.randint(0, 40)
                 y_art = y_top - line_spacing * random.uniform(1.8, 2.8)
                 y_art = max(y_art, art_font_size + random.randint(5, 15))
 
-                current_art_font = art_font if "5" in art_text else small_art_font
-                draw_final.text((x, y_art), art_text, fill=numbers_color, font=current_art_font, anchor="md")
+                # current_art_font = art_font if "5" in art_text else small_art_font
+                draw_final.text((x_art, y_art), art_text, fill=numbers_color, font=art_font, anchor="md")
 
-                # STRZAŁKI BENDÓW
+                # strzałki bendów
                 if any(bend_type in art_text for bend_type in ["1/", "Full", "PB"]):
                     top_note = min(group, key=lambda n: n['render_y'])
                     x0 = top_note['bbox'][2] + 2
                     y0 = top_note['render_y']
 
-                    x1 = x + line_spacing * 0.2
+                    x1 = x_art + line_spacing * 0.2
                     y1 = y_art + 10
 
                     cx = x0 + line_spacing * 0.5
@@ -260,13 +261,14 @@ class NotesGenerator:
 
                     aw = line_spacing * 0.12
                     ah = line_spacing * 0.15
-                    draw_final.polygon([(x1 - aw, y1 + ah), (x1, y1 - 2), (x1 + aw, y1 + ah - 2)], fill=line_color)
+                    draw_final.polygon([(x1 - aw, y1 + ah), (x1, y1 - 2), (x1 + aw, y1 + ah - 2)], fill=line_color,
+                                       width=max(1, line_width + random.randint(-1, 2)))
 
-            # Łuki na dole (z 0.25 na 0.1)
+            # Łuki na dole
             if random.random() < 0.10:
-                y_arc = string_y_positions[max(n['string'] for n in group) - 1] + line_spacing * 0.5
+                y_arc = string_y_positions[max(n['string'] for n in group) - 1] + line_spacing * 0.1
                 draw_final.arc([x, y_arc, x + chord_spacing * 0.9, y_arc + line_spacing], start=0, end=180,
-                               fill=line_color, width=max(1, line_width))
+                               fill=line_color, width=max(1, line_width + random.randint(-1, 2)))
 
         # RYSOWANIE NUT NA SAMYM WIERZCHU ORAZ ETYKIETOWANIE + SLIDES
         labels_model_a = []
@@ -284,19 +286,21 @@ class NotesGenerator:
             draw_final.text((x, y), text, fill=numbers_color, font=font, anchor="mm", stroke_width=stroke_width,
                             stroke_fill=numbers_color)
 
-            # Rysowanie ukośnych kresek - zmniejszono z 0.12 na 0.05
-            if random.random() < 0.05:  # Slide In (/)
-                draw_final.line([
-                    (bbox[0] - line_spacing * 0.3, y + line_spacing * 0.25),
-                    (bbox[0] - line_spacing * 0.05, y - line_spacing * 0.25)
-                ], fill=line_color, width=max(1, line_width))
-            elif random.random() < 0.05:  # Slide Out (\)
-                draw_final.line([
-                    (bbox[2] + line_spacing * 0.05, y - line_spacing * 0.25),
-                    (bbox[2] + line_spacing * 0.3, y + line_spacing * 0.25)
-                ], fill=line_color, width=max(1, line_width))
+            # Slide In
+            if random.random() < 0.05:
+                y_offset = random.randint(-5, 5)
+                if random.random() < 0.5:
+                    draw_final.line([
+                        (bbox[0] - line_spacing * 0.3 + random.randint(-15, 5), y + line_spacing * 0.25 + y_offset),
+                        (bbox[0] - line_spacing * 0.05 + random.randint(-15, 0), y - line_spacing * 0.25 + y_offset)
+                    ], fill=line_color, width=max(1, line_width))
+                else:
+                    draw_final.line([
+                        (bbox[2] + line_spacing * 0.05 + random.randint(-0, 15), y - line_spacing * 0.25 + y_offset),
+                        (bbox[2] + line_spacing * 0.3 + random.randint(-5, 15), y + line_spacing * 0.25 + y_offset)
+                    ], fill=line_color, width=max(1, line_width))
 
-            # Etykietowanie modelu A
+            # Etykietowanie DCRN modelu A
             class_id = note['fret']
             w_box = (bbox[2] - bbox[0]) / width
             h_box = (bbox[3] - bbox[1]) / height
@@ -307,14 +311,14 @@ class NotesGenerator:
             # Etykietowanie CRNN (model B)
             if x not in chords_model_b:
                 chords_model_b[x] = []
-            chords_model_b[x].append(f"{string_num}:{note['fret']}")
+            chords_model_b[x].append(f"digit.{note['fret']}:{string_num}")
 
         sorted_chords_model_b = sorted(chords_model_b.keys())
         sequence_steps_model_b = []
         for x in sorted_chords_model_b:
-            step_str = ",".join(str(fret) for fret in chords_model_b[x])
+            step_str = " ".join(str(fret) for fret in chords_model_b[x])
             sequence_steps_model_b.append(step_str)
-        labels_model_b = " | ".join(sequence_steps_model_b)
+        labels_model_b = " + ".join(sequence_steps_model_b)
 
         # Dodanie zakłóceń i zapis
         final_img = self.apply_noise(final_img, 0.6)
@@ -386,6 +390,6 @@ if __name__ == "__main__":
     print(f"Rozpoczynamy generowanie {GEN_NUMBER} obrazków w puli procesów...")
 
     with concurrent.futures.ProcessPoolExecutor(max_workers=8) as executor:
-        list(tqdm(executor.map(generator.generate_single_tab, range(GEN_NUMBER)), total=GEN_NUMBER))
+        list(tqdm(executor.map(generator.generate_single_tab, range(20000, 20000 + GEN_NUMBER)), total=GEN_NUMBER))
 
     print("\nGenerowanie zakończone!")
