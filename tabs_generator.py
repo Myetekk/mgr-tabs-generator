@@ -32,6 +32,7 @@ class NotesGenerator:
         self.notes = []
         self.line_spacing = random.randint(30, 80)
         self.chord_spacing = int(self.line_spacing * random.uniform(1.3, 2.5))
+
         if random.random() < 0.99:  max_allowed_width = random.randint(int(self.chord_spacing * 2), 1000)  # normal tab width
         else:  max_allowed_width = random.randint(int(self.chord_spacing * 1.1), int(self.chord_spacing * 1.9))  # very narrow tab in 3% chance
 
@@ -54,7 +55,6 @@ class NotesGenerator:
         self.notes.sort(key=lambda x: (x['x_pos'], x['string']))
 
         output_name = f"tab_{index}"
-
         self.generate_tab(output_name)
 
         gc.collect()
@@ -77,8 +77,8 @@ class NotesGenerator:
         width = int(max_x * self.chord_spacing + margin_x + random.randint(0, 10))
 
         strict_tab_height = self.line_spacing * 5
-        top_margin = int(self.line_spacing * random.uniform(1.0, 5.0))
-        bottom_margin = int(self.line_spacing * random.uniform(1.0, 5.5))
+        top_margin = int(self.line_spacing * random.uniform(1.0, 3.0))
+        bottom_margin = int(self.line_spacing * random.uniform(1.0, 3.0))
         height = int(strict_tab_height + top_margin + bottom_margin)
         string_y_positions = [top_margin + i * self.line_spacing for i in range(6)]
 
@@ -122,7 +122,7 @@ class NotesGenerator:
         self._draw_articulations(draw_final, grouped_notes, string_y_positions)
         self._draw_bottom_arcs(draw_final)
 
-        # Draw the "current time" vertical line (e.g., 30% chance)
+        # Draw the "current time" vertical line
         if random.random() < 0.40:  self._draw_time_line(draw_final, max_x, string_y_positions)
 
         # 7. Draw the actual note text and generate the label sequences
@@ -143,10 +143,11 @@ class NotesGenerator:
         self.line_width = random.randint(1, 3)
 
         self.fonts = ["arial.ttf", "arialbd.ttf", "calibri.ttf", "calibrib.ttf", "tahoma.ttf", "tahomabd.ttf", "verdana.ttf", "verdanab.ttf", "consola.ttf", "consolab.ttf"]
+        self.font_size = int(self.line_spacing) + random.randint(-5, 5)
         try:
-            self.font = ImageFont.truetype(random.choice(self.fonts), int(self.line_spacing) + random.randint(-2, 2))
+            self.font = ImageFont.truetype(random.choice(self.fonts), self.font_size)
         except:
-            self.font = ImageFont.truetype("arial.ttf", int(self.line_spacing))
+            self.font = ImageFont.truetype("arial.ttf", self.font_size)
 
 
 
@@ -194,11 +195,9 @@ class NotesGenerator:
                         thick_w = thin_w + random.randint(1, 3)
                         gap = thin_w + thick_w + random.randint(1, 3)
                         draw_lines.line([(gap_x, y_top), (gap_x, y_bottom)], fill=self.line_color + (255,), width=thin_w)
-                        draw_lines.line([(gap_x + gap, y_top), (gap_x + gap, y_bottom)], fill=self.line_color + (255,),
-                                        width=thick_w)
+                        draw_lines.line([(gap_x + gap, y_top), (gap_x + gap, y_bottom)], fill=self.line_color + (255,), width=thick_w)
                     else:
-                        draw_lines.line([(gap_x, y_top), (gap_x, y_bottom)], fill=self.line_color + (255,),
-                                        width=self.line_width + random.randint(-1, 2))
+                        draw_lines.line([(gap_x, y_top), (gap_x, y_bottom)], fill=self.line_color + (255,), width=self.line_width + random.randint(-1, 2))
                     barline_x_positions.append(gap_x)
 
         return barline_x_positions
@@ -249,15 +248,15 @@ class NotesGenerator:
         measure_range = random.randint(0, 40)
         measure_color = (measure_range + random.randint(-5, 5), measure_range + random.randint(-5, 5), measure_range + random.randint(-5, 5))
 
+        m_size = self.font_size * random.uniform(0.3, 0.6)
         try:
-            m_size = max(10, int(self.line_spacing * random.uniform(0.4, 0.7))) + random.randint(-2, 2)
             measure_font = ImageFont.truetype(random.choice(self.fonts), m_size)
         except:
-            measure_font = ImageFont.truetype("arial.ttf", 12 + random.randint(-2, 2))
+            measure_font = ImageFont.truetype("arial.ttf", m_size)
 
         for gap_x in barline_x_positions:
             if random.random() < 0.4:
-                offset_x, offset_y = random.randint(-30, 0), random.randint(-10, 5)
+                offset_x, offset_y = random.randint(-30, 0), random.randint(-10, 15)
                 draw_final.text((gap_x + offset_x, y_top + offset_y - self.line_spacing * 1.1), str(measure_counter), fill=measure_color, font=measure_font)
                 measure_counter += 1
 
@@ -269,43 +268,43 @@ class NotesGenerator:
         note groups with vertical stems and horizontal bottom beams, resembling sheet music rhythm notation.
         """
         sorted_x_positions = sorted(grouped_notes.keys())
+        beam_color = tuple(max(0, min(255, c + random.randint(-3, 3))) for c in self.line_color)
 
         def draw_beam_group(bg):
             """Draw stems + shared beam bar for a list of x positions."""
-            if len(bg) < 2:
+            beam_width = max(1, min(self.line_width + random.randint(-2, 2), 4))
+
+            if len(bg) < 2:  ## single beam with arc
                 x = bg[0]
                 grp = grouped_notes[x]
                 bottom_string_idx = max(n['string'] for n in grp) - 1
-                y_start = string_y_positions[bottom_string_idx] + self.line_spacing * 0.6
-                y_end = min(string_y_positions[5] + self.line_spacing * random.uniform(1.5, 2.4), height - random.randint(2, 12))
-                stem_w = max(1, self.line_width + random.randint(-1, 1))
+                y_start = string_y_positions[bottom_string_idx] + self.line_spacing * random.uniform(0.25, 0.7)
+                y_end = string_y_positions[5] + self.line_spacing * random.uniform(1.2, 3.5)
 
-                draw_final.line([(x, y_start), (x, y_end)], fill=self.line_color, width=stem_w)
+                draw_final.line([(x, y_start), (x, y_end)], fill=beam_color, width=beam_width)
 
                 # Dynamic curve at the bottom (eighth-note flag)
                 arc_w = int(self.line_spacing * random.uniform(0.4, 1.0))
                 arc_h = int(self.line_spacing * random.uniform(0.4, 1.1))
-                draw_final.arc([x, y_end - arc_h, x + arc_w, y_end + arc_h], start=180, end=270, fill=self.line_color, width=max(1, self.line_width))
-            else:
-                beam_y = min(string_y_positions[5] + self.line_spacing * random.uniform(1.4, 2.2), height - random.randint(5, 15))
-                beam_thickness = random.randint(3, 7)
-                stem_w = max(1, self.line_width + random.randint(-1, 1))
+                draw_final.arc([x, y_end - arc_h, x + arc_w, y_end + arc_h], start=180, end=270, fill=beam_color, width=beam_width+random.randint(-1,1))
+            else:  ## conected beams
+                beam_y = string_y_positions[5] + self.line_spacing * random.uniform(1.0, 4.5)
+                beam_thickness = beam_width + random.randint(-1, 3)
                 stem_x_list = []
 
                 for x in bg:
                     grp = grouped_notes[x]
                     bottom_string_idx = max(n['string'] for n in grp) - 1
-                    y_start = string_y_positions[bottom_string_idx] + self.line_spacing * 0.6
-                    draw_final.line([(x, y_start), (x, beam_y)], fill=self.line_color, width=stem_w)
+                    y_start = string_y_positions[bottom_string_idx] + self.line_spacing * random.uniform(0.25, 0.7)
+                    draw_final.line([(x, y_start), (x, beam_y)], fill=beam_color, width=beam_width)
                     stem_x_list.append(x)
 
-                draw_final.line([(stem_x_list[0], beam_y), (stem_x_list[-1], beam_y)], fill=self.line_color,
-                                width=beam_thickness)
+                draw_final.line([(stem_x_list[0], beam_y), (stem_x_list[-1], beam_y)], fill=beam_color, width=beam_thickness)
 
                 if len(bg) >= 4 and random.random() < 0.4:
                     second_beam_y = beam_y - beam_thickness - random.randint(2, 5)
                     mid = len(stem_x_list) // 2
-                    draw_final.line([(stem_x_list[0], second_beam_y), (stem_x_list[mid - 1], second_beam_y)], fill=self.line_color, width=beam_thickness)
+                    draw_final.line([(stem_x_list[0], second_beam_y), (stem_x_list[mid - 1], second_beam_y)], fill=beam_color, width=beam_thickness)
 
         i = 0
         while i < len(sorted_x_positions):
@@ -331,20 +330,22 @@ class NotesGenerator:
     def _draw_articulations(self, draw_final, grouped_notes, string_y_positions):
         """Draws articulation marks (e.g. Palm Mutes, Harmonics, Bend arrows) above the staff."""
         y_top = string_y_positions[0]
+        articulations_color = tuple(max(0, min(255, c + random.randint(-3, 3))) for c in self.line_color)
+
         for x, group in grouped_notes.items():
             if random.random() < 0.15:
                 art_text = random.choice([
                     "P.M.", "H", "P", "C#5", "C5", "D5", "(E5)", "Dsus2", "Cmaj7", "B7sus4", "1/4", "1/2", "Full", "1 1/2", "PB", "T", "S", "sl.", "v", "vib", "Tr.", "harm.", "N.H.", "A.H.", "P.H.", "T.H.", "w/bar"
                 ])
 
+                a_size = self.font_size * random.uniform(0.5, 1.3)
                 try:
-                    a_size = max(12, int(self.line_spacing * random.uniform(0.7, 1.4))) + random.randint(-2, 2)
                     art_font = ImageFont.truetype(random.choice(self.fonts), a_size)
                 except:
-                    art_font = ImageFont.truetype("arial.ttf", 16 + random.randint(-2, 2))
+                    art_font = ImageFont.truetype("arial.ttf", a_size)
 
-                x_art = x + random.randint(0, 40)
-                y_art = max(y_top - self.line_spacing * random.uniform(1.8, 2.8), art_font.size + random.randint(5, 15))
+                x_art = x + self.chord_spacing * random.uniform(0.0, 1.0)
+                y_art = y_top - self.line_spacing * random.uniform(0.5, 5.5)
 
                 # P.M. optionally gets a trailing dashed line (e.g., "P.M. - - - -|")
                 if art_text == "P.M." and random.random() < 0.5:
@@ -366,11 +367,11 @@ class NotesGenerator:
                         yt = (1 - t) ** 2 * y0 + 2 * (1 - t) * t * cy + t ** 2 * y1
                         pts.append((xt, yt))
 
-                    draw_final.line(pts, fill=self.line_color, width=max(1, self.line_width))
+                    draw_final.line(pts, fill=articulations_color, width=max(1, self.line_width))
 
                     # Arrow head
                     aw, ah = self.line_spacing * 0.12, self.line_spacing * 0.15
-                    draw_final.polygon([(x1 - aw, y1 + ah), (x1, y1 - 2), (x1 + aw, y1 + ah - 2)], fill=self.line_color, width=max(1, self.line_width + random.randint(-1, 2)))
+                    draw_final.polygon([(x1 - aw, y1 + ah), (x1, y1 - 2), (x1 + aw, y1 + ah - 2)], fill=articulations_color, width=max(1, self.line_width + random.randint(-1, 2)))
 
 
 
@@ -379,8 +380,9 @@ class NotesGenerator:
         Draws bottom arcs (hammer-on / pull-off ties). Only connects two notes that are
         on the SAME string and where there is NO other note on ANY string between their positions.
         """
-        arc_lw = max(1, self.line_width + random.randint(-1, 2))
+        arc_width = max(1, min(self.line_width + random.randint(-2, 2), 4))
         all_occupied_x = set(n['x_pos'] for n in self.notes)
+        bottom_arcs_color = tuple(max(0, min(255, c + random.randint(-3, 3))) for c in self.line_color)
 
         notes_by_string = {}
         for note in self.notes:
@@ -400,9 +402,9 @@ class NotesGenerator:
 
                 x_left = (left_note['bbox'][0] + left_note['bbox'][2]) / 2
                 x_right = (right_note['bbox'][0] + right_note['bbox'][2]) / 2
-                y_anchor = max(left_note['bbox'][3], right_note['bbox'][3]) + int(self.line_spacing * 0.05)
+                y_anchor = max(left_note['bbox'][3], right_note['bbox'][3]) + int(self.line_spacing) * random.uniform(0.05, 0.25)
 
-                arc_depth = self.line_spacing * random.uniform(0.35, 0.65)
+                arc_depth = self.line_spacing * random.uniform(0.3, 0.75)
                 cx_ctrl, cy_ctrl = (x_left + x_right) / 2, y_anchor + arc_depth
 
                 arc_pts = []
@@ -411,7 +413,7 @@ class NotesGenerator:
                     by = (1 - t) ** 2 * y_anchor + 2 * (1 - t) * t * cy_ctrl + t ** 2 * y_anchor
                     arc_pts.append((bx, by))
 
-                draw_final.line(arc_pts, fill=self.line_color, width=arc_lw)
+                draw_final.line(arc_pts, fill=bottom_arcs_color, width=arc_width)
 
 
 
@@ -436,17 +438,19 @@ class NotesGenerator:
 
             # Draw Slide In effect randomly
             if random.random() < 0.05:
+                slide_width = max(1, self.line_width + random.randint(-2, 2))
+                slide_color = tuple(max(0, min(255, c + random.randint(-3, 3))) for c in self.line_color)
                 y_offset = random.randint(-5, 5)
                 if random.random() < 0.5:  # Slide up
                     draw_final.line([
                         (bbox[0] - self.line_spacing * 0.3 + random.randint(-15, 5), y + self.line_spacing * 0.25 + y_offset),
                         (bbox[0] - self.line_spacing * 0.05 + random.randint(-15, 0), y - self.line_spacing * 0.25 + y_offset)
-                    ], fill=self.line_color, width=max(1, self.line_width))
+                    ], fill=slide_color, width=max(1, slide_width))
                 else:  # Slide down
                     draw_final.line([
                         (bbox[2] + self.line_spacing * 0.05 + random.randint(0, 15), y - self.line_spacing * 0.25 + y_offset),
                         (bbox[2] + self.line_spacing * 0.3 + random.randint(-5, 15), y + self.line_spacing * 0.25 + y_offset)
-                    ], fill=self.line_color, width=max(1, self.line_width))
+                    ], fill=slide_color, width=max(1, slide_width))
 
             # Label generation for DCRN (Model A: Bounding boxes using YOLO format)
             class_id = note['fret']
@@ -471,13 +475,13 @@ class NotesGenerator:
     def _draw_time_line(self, draw_final, max_x, string_y_positions):
         """Draws a vertical line representing the current playback time."""
         time_x = random.randint(int(self.chord_spacing), int(max_x * self.chord_spacing))
-        y_top = string_y_positions[0] - random.randint(10, 60)
-        y_bottom = string_y_positions[5] + random.randint(10, 60)
+        y_top = string_y_positions[0] - self.line_spacing * random.uniform(0.5, 3.0)
+        y_bottom = string_y_positions[5] + self.line_spacing * random.uniform(0.5, 3.0)
 
-        width = max(3, self.line_width + random.randint(-1, 5))
+        width = max(3, self.line_width + random.randint(0, 6))
 
         time_line_range = random.choice([(58, 255, 48), (185, 194, 192), (198, 216, 201)])
-        time_line_color = time_line_range[0] + random.randint(-5, 5), time_line_range[1] + random.randint(-5, 5), time_line_range[2] + random.randint(-5, 5)
+        time_line_color = time_line_range[0] + random.randint(-3, 3), time_line_range[1] + random.randint(-3, 3), time_line_range[2] + random.randint(-3, 3)
 
         draw_final.line([(time_x, y_top), (time_x, y_bottom)], fill=time_line_color, width=width)
 
