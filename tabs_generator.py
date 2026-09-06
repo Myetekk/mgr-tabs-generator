@@ -8,7 +8,9 @@ import concurrent.futures
 from tqdm import tqdm
 from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
 
-DATA_DIR = '..\\dataset'
+# DATA_DIR = '..\\train_dataset_good'
+DATA_DIR = '..\\train_dataset_medium'
+# DATA_DIR = '..\\train_dataset_weak'
 
 GEN_NUMBER = 65000
 
@@ -156,7 +158,7 @@ class NotesGenerator:
         labels_model_a, labels_model_b = self._draw_notes_and_get_labels(draw_final, width, height, stroke_width)
 
         # Apply visual distortions and save files
-        final_img = self.apply_noise(final_img, 0.6)
+        final_img = self.apply_noise(final_img, 0.3)
         self.save_files(final_img, output_name, labels_model_a, labels_model_b)
 
 
@@ -581,23 +583,23 @@ class NotesGenerator:
                 np_image = np.clip(np_image.astype('int16') + noise, 0, 255).astype('uint8')
                 image = Image.fromarray(np_image)
 
-            if random.random() < noise_percentage:
-                np_image = np.array(image)
-                kernel_size = random.choice([1, 3, 5, 7])
-                kernel_motion_blur = np.zeros((kernel_size, kernel_size))
-                kernel_motion_blur[int((kernel_size - 1) / 2), :] = np.ones(kernel_size)
-                kernel_motion_blur /= kernel_size
-                np_image = cv2.filter2D(np_image, -1, kernel_motion_blur)
-                image = Image.fromarray(np_image)
-
-            if random.random() < noise_percentage:
-                image = image.filter(ImageFilter.GaussianBlur(radius=random.uniform(0.5, 1.5)))
-
-            if random.random() < noise_percentage:
-                buffer = io.BytesIO()
-                image.save(buffer, format="JPEG", quality=random.randint(10, 70))
-                buffer.seek(0)
-                image = Image.open(buffer).convert('RGB')
+            # if random.random() < noise_percentage:
+            #     np_image = np.array(image)
+            #     kernel_size = random.choice([1, 3, 5, 7])
+            #     kernel_motion_blur = np.zeros((kernel_size, kernel_size))
+            #     kernel_motion_blur[int((kernel_size - 1) / 2), :] = np.ones(kernel_size)
+            #     kernel_motion_blur /= kernel_size
+            #     np_image = cv2.filter2D(np_image, -1, kernel_motion_blur)
+            #     image = Image.fromarray(np_image)
+            #
+            # if random.random() < noise_percentage:
+            #     image = image.filter(ImageFilter.GaussianBlur(radius=random.uniform(0.5, 1.5)))
+            #
+            # if random.random() < noise_percentage:
+            #     buffer = io.BytesIO()
+            #     image.save(buffer, format="JPEG", quality=random.randint(10, 70))
+            #     buffer.seek(0)
+            #     image = Image.open(buffer).convert('RGB')
 
         except Exception as e:
             print(f"Error in apply_noise: {e}")
