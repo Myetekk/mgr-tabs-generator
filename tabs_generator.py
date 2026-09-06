@@ -10,7 +10,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
 
 DATA_DIR = '..\\dataset'
 
-GEN_NUMBER = 100
+GEN_NUMBER = 65000
 
 
 class NotesGenerator:
@@ -30,23 +30,40 @@ class NotesGenerator:
         then triggers the rendering process.
         """
         self.notes = []
-        self.line_spacing = random.randint(30, 80)
-        self.chord_spacing = int(self.line_spacing * random.uniform(1.3, 2.5))
 
-        if random.random() < 0.99:  max_allowed_width = random.randint(int(self.chord_spacing * 2), 1000)  # normal tab width
-        else:  max_allowed_width = random.randint(int(self.chord_spacing * 1.1), int(self.chord_spacing * 1.9))  # very narrow tab in 3% chance
+        if random.random() < 0.96:  self.line_spacing = random.randint(30, 80)  # normal line spacing
+        else:  self.line_spacing = random.randint(20, 30)  # small line spacing in 4% chance
 
-        current_x = 1
+        if random.random() < 0.96:  self.chord_spacing = int(self.line_spacing * random.uniform(1.3, 2.5))  # normal chord spacing
+        else:  self.chord_spacing = int(self.line_spacing * random.uniform(1.1, 1.3))  # small chord spacing in 4% chance
+
+        if random.random() < 0.98:  max_allowed_width = random.randint(int(self.chord_spacing * 2), 1000)  # normal tab width
+        else:  max_allowed_width = random.randint(int(self.chord_spacing * 1.1), int(self.chord_spacing * 1.9))  # very narrow tab in 2% chance
 
         # Populate the tablature with random chords and single notes
+        self.has_time_sig = random.random() < 0.2
+        current_x = 2 if self.has_time_sig else 1
+        self.empty_columns_for_rests = []
+
+        # Ensure max_allowed_width allows at least one note to be generated
+        if max_allowed_width <= current_x * self.chord_spacing:
+            max_allowed_width = int((current_x + 1.5) * self.chord_spacing)
+
         while current_x * self.chord_spacing < max_allowed_width:
+            if random.random() < 0.15:  # 15% chance to leave a gap for a rest
+                self.empty_columns_for_rests.append(current_x)
+                current_x += 1
+                if current_x > 25: break
+                continue
+
             chord_number = random.choices([1, 2, 3, 4, 5, 6], [200, 60, 15, 5, 2, 1])[0]
             strings = random.sample([1, 2, 3, 4, 5, 6], chord_number)
 
             for string in strings:
                 # Weighted random distribution of frets (lower frets are more common)
-                fret_weights = [15, 12, 12, 12, 10, 10, 8, 8, 6, 6] + [1] * 15
-                fret = random.choices(list(range(25)), weights=fret_weights)[0]
+                fret_choices = list(range(25)) + ['X']
+                fret_weights = [15, 12, 12, 12, 10, 10, 8, 8, 6, 6] + [1] * 15 + [3]
+                fret = random.choices(fret_choices, weights=fret_weights)[0]
                 self.notes.append({'string': string, 'fret': fret, 'x_pos': current_x})
 
             current_x += 1
@@ -72,7 +89,11 @@ class NotesGenerator:
         self._general_settings()
 
         # Calculate dimensions
-        max_x = max(note['x_pos'] for note in self.notes) if self.notes else 100
+        all_x_positions = [note['x_pos'] for note in self.notes] + getattr(self, 'empty_columns_for_rests', [])
+        if getattr(self, 'has_time_sig', False):
+            all_x_positions.append(1)
+            
+        max_x = max(all_x_positions) if all_x_positions else 2
         margin_x = self.chord_spacing + random.randint(0, 100)
         width = int(max_x * self.chord_spacing + margin_x + random.randint(0, 10))
 
@@ -92,16 +113,16 @@ class NotesGenerator:
         marker_img = Image.new('RGBA', (width, height), (0, 0, 0, 0))
         draw_marker = ImageDraw.Draw(marker_img)
 
-        # 1. Draw horizontal staff strings and vertical measure barlines
+        # Draw horizontal staff strings and vertical measure barlines
         barline_x_positions = self._draw_staff_and_barlines(draw_lines, width, string_y_positions, max_x)
 
-        # 2. Pre-calculate note bounding boxes and optionally clear background lines
+        # Pre-calculate note bounding boxes and optionally clear background lines
         self._prepare_note_bboxes(draw_lines, string_y_positions, lines_img)
 
-        # 3. Draw random highlight markers over the background
+        # Draw random highlight markers over the background
         self._draw_highlight_markers(draw_marker, width, height, top_margin, bottom_margin)
 
-        # 4. Composite the base layers based on transparency priorities
+        # Composite the base layers based on transparency priorities
         # Strings over marker
         final_img = Image.alpha_composite(base_img, marker_img)
         final_img = Image.alpha_composite(final_img, lines_img)
@@ -109,7 +130,7 @@ class NotesGenerator:
         final_img = final_img.convert('RGB')
         draw_final = ImageDraw.Draw(final_img)
 
-        # 5. Draw measure numbers above the barlines
+        # Draw measure numbers above the barlines
         self._draw_measure_numbers(draw_final, barline_x_positions, string_y_positions[0])
 
         # Group notes by X-coordinate for vertical alignment drawing
@@ -117,20 +138,24 @@ class NotesGenerator:
         for note in self.notes:
             grouped_notes.setdefault(note['x_pos'] * self.chord_spacing, []).append(note)
 
-        # 6. Draw structural groupings and articulations
+        # Draw structural groupings and articulations
         self._draw_beams(draw_final, grouped_notes, string_y_positions, height)
         self._draw_articulations(draw_final, grouped_notes, string_y_positions)
         self._draw_bottom_arcs(draw_final)
 
+        # Draw time signatures and rests (NOISE for the model to ignore)
+        self._draw_time_signatures(draw_final, string_y_positions)
+        self._draw_rests(draw_final, string_y_positions)
+
         # Draw the "current time" vertical line
         if random.random() < 0.40:  self._draw_time_line(draw_final, max_x, string_y_positions)
 
-        # 7. Draw the actual note text and generate the label sequences
+        # Draw the actual note text and generate the label sequences
         stroke_width = random.choices([0, 1], weights=[0.3, 0.7])[0]
 
         labels_model_a, labels_model_b = self._draw_notes_and_get_labels(draw_final, width, height, stroke_width)
 
-        # 8. Apply visual distortions and save files
+        # Apply visual distortions and save files
         final_img = self.apply_noise(final_img, 0.6)
         self.save_files(final_img, output_name, labels_model_a, labels_model_b)
 
@@ -140,7 +165,7 @@ class NotesGenerator:
         """Settings that can be applied to multiple functions"""
         self.numbers_on_lines = random.random() < 0.35
 
-        self.line_width = random.randint(1, 3)
+        self.line_width = random.randint(1, 4)
 
         self.fonts = ["arial.ttf", "arialbd.ttf", "calibri.ttf", "calibrib.ttf", "tahoma.ttf", "tahomabd.ttf", "verdana.ttf", "verdanab.ttf", "consola.ttf", "consolab.ttf"]
         self.font_size = int(self.line_spacing) + random.randint(-5, 5)
@@ -223,19 +248,25 @@ class NotesGenerator:
 
     def _draw_highlight_markers(self, draw_marker, width, height, top_margin, bottom_margin):
         """Draws transparent highlight rectangles (markers) typical in scanned/annotated documents."""
-        if random.random() < 0.15:
+        if random.random() < 0.2:
             num_highlights = random.randint(1, 2)
             for _ in range(num_highlights):
                 hx_start = random.randint(int(self.chord_spacing), int(width * 0.7))
-                hx_end = hx_start + random.randint(int(self.chord_spacing), int(self.chord_spacing * 4))
-                if random.random() < 0.5:  h_color = [246+random.randint(-5,5), 247+random.randint(-5,5), 213+random.randint(-5,5)]
-                else:  h_color = [243+random.randint(-5,5), 232+random.randint(-5,5), 223+random.randint(-5,5)]
+                hx_end = hx_start + random.randint(int(self.chord_spacing), int(self.chord_spacing * 5))
+
+                rand_color = random.random()
+                if rand_color < 0.4:
+                    h_color = [246+random.randint(-5,5), 247+random.randint(-5,5), 213+random.randint(-5,5)]
+                elif rand_color < 0.7:
+                    h_color = [220 + random.randint(-5, 5), 230 + random.randint(-5, 5), 245 + random.randint(-5, 5)]
+                else:
+                    h_color = [243+random.randint(-5,5), 232+random.randint(-5,5), 223+random.randint(-5,5)]
 
                 if random.random() < 0.5:
                     hy_start, hy_end = 0, height
                 else:
-                    hy_start = top_margin - self.line_spacing
-                    hy_end = height - bottom_margin + self.line_spacing
+                    hy_start = top_margin - self.line_spacing * random.uniform(0, 3)
+                    hy_end = height - bottom_margin + self.line_spacing * random.uniform(0, 3)
 
                 draw_marker.rectangle([hx_start, hy_start, hx_end, hy_end], fill=tuple(h_color))
 
@@ -272,9 +303,9 @@ class NotesGenerator:
 
         def draw_beam_group(bg):
             """Draw stems + shared beam bar for a list of x positions."""
-            beam_width = max(1, min(self.line_width + random.randint(-2, 2), 4))
+            beam_width = max(1, 5)
 
-            if len(bg) < 2:  ## single beam with arc
+            if len(bg) < 2:  # single beam with arc
                 x = bg[0]
                 grp = grouped_notes[x]
                 bottom_string_idx = max(n['string'] for n in grp) - 1
@@ -287,7 +318,7 @@ class NotesGenerator:
                 arc_w = int(self.line_spacing * random.uniform(0.4, 1.0))
                 arc_h = int(self.line_spacing * random.uniform(0.4, 1.1))
                 draw_final.arc([x, y_end - arc_h, x + arc_w, y_end + arc_h], start=180, end=270, fill=beam_color, width=beam_width+random.randint(-1,1))
-            else:  ## conected beams
+            else:  # conected beams
                 beam_y = string_y_positions[5] + self.line_spacing * random.uniform(1.0, 4.5)
                 beam_thickness = beam_width + random.randint(-1, 3)
                 stem_x_list = []
@@ -380,7 +411,7 @@ class NotesGenerator:
         Draws bottom arcs (hammer-on / pull-off ties). Only connects two notes that are
         on the SAME string and where there is NO other note on ANY string between their positions.
         """
-        arc_width = max(1, min(self.line_width + random.randint(-2, 2), 4))
+        arc_width = max(1, 5)
         all_occupied_x = set(n['x_pos'] for n in self.notes)
         bottom_arcs_color = tuple(max(0, min(255, c + random.randint(-3, 3))) for c in self.line_color)
 
@@ -437,23 +468,23 @@ class NotesGenerator:
             draw_final.text((x, y), text, fill=self.numbers_color, font=self.font, anchor="mm", stroke_width=stroke_width, stroke_fill=self.numbers_color)
 
             # Draw Slide In effect randomly
-            if random.random() < 0.05:
-                slide_width = max(1, self.line_width + random.randint(-2, 2))
+            if random.random() < 0.1:
+                slide_width = max(1, 5)
                 slide_color = tuple(max(0, min(255, c + random.randint(-3, 3))) for c in self.line_color)
-                y_offset = random.randint(-5, 5)
+                y_offset = random.randint(-7, 7)
                 if random.random() < 0.5:  # Slide up
                     draw_final.line([
-                        (bbox[0] - self.line_spacing * 0.3 + random.randint(-15, 5), y + self.line_spacing * 0.25 + y_offset),
+                        (bbox[0] - self.line_spacing * 0.3 + random.randint(-15, 7), y + self.line_spacing * 0.25 + y_offset),
                         (bbox[0] - self.line_spacing * 0.05 + random.randint(-15, 0), y - self.line_spacing * 0.25 + y_offset)
                     ], fill=slide_color, width=max(1, slide_width))
                 else:  # Slide down
                     draw_final.line([
                         (bbox[2] + self.line_spacing * 0.05 + random.randint(0, 15), y - self.line_spacing * 0.25 + y_offset),
-                        (bbox[2] + self.line_spacing * 0.3 + random.randint(-5, 15), y + self.line_spacing * 0.25 + y_offset)
+                        (bbox[2] + self.line_spacing * 0.3 + random.randint(-7, 15), y + self.line_spacing * 0.25 + y_offset)
                     ], fill=slide_color, width=max(1, slide_width))
 
             # Label generation for DCRN (Model A: Bounding boxes using YOLO format)
-            class_id = note['fret']
+            class_id = 25 if str(note['fret']) == 'X' else note['fret']
             w_box = (bbox[2] - bbox[0]) / width
             h_box = (bbox[3] - bbox[1]) / height
             x_center = x / width
@@ -469,6 +500,53 @@ class NotesGenerator:
         labels_model_b = " + ".join(sequence_steps_model_b)
 
         return labels_model_a, labels_model_b
+
+
+
+    def _draw_time_signatures(self, draw_final, string_y_positions):
+        """Randomly draws a time signature (like 4/4) at the start of the staff."""
+        if getattr(self, 'has_time_sig', False):
+            ts_top = random.choice(["2", "3", "4", "5", "6", "7", "9", "12"])
+            ts_bottom = random.choice(["4", "8"])
+            ts_size = self.font_size * random.uniform(1.2, 2.8)
+            try:
+                ts_font = ImageFont.truetype(random.choice(self.fonts), ts_size)
+            except:
+                ts_font = ImageFont.truetype("arialbd.ttf", ts_size)
+            # Draw exactly in the reserved 1st column area
+            x_pos = 1 * self.chord_spacing
+            y_center_top = (string_y_positions[0] + string_y_positions[2]) / 2
+            y_center_bottom = (string_y_positions[3] + string_y_positions[5]) / 2
+            draw_final.text((x_pos, y_center_top), ts_top, fill=self.numbers_color, font=ts_font, anchor="mm")
+            draw_final.text((x_pos, y_center_bottom), ts_bottom, fill=self.numbers_color, font=ts_font, anchor="mm")
+
+
+
+    def _draw_rests(self, draw_final, string_y_positions):
+        """Draws professional musical rests using the Segoe UI Symbol font."""
+        empty_cols = getattr(self, 'empty_columns_for_rests', [])
+        for col_x in empty_cols:
+            x_pos = col_x * self.chord_spacing
+            rest_color = tuple(max(0, min(255, c + random.randint(-15, 15))) for c in self.numbers_color)
+            
+            # \U0001D13B (whole), \U0001D13C (half), \U0001D13D (quarter), \U0001D13E (eighth), \U0001D13F (sixteenth)
+            rest_char = random.choice(['\U0001D13B', '\U0001D13C', '\U0001D13D', '\U0001D13E', '\U0001D13F'])
+            
+            r_size = self.font_size * random.uniform(1.3, 1.9)
+            try:
+                # Windows system font that contains musical symbols
+                r_font = ImageFont.truetype("seguisym.ttf", int(r_size))
+            except:
+                try:
+                    r_font = ImageFont.truetype("arial.ttf", int(r_size))
+                except:
+                    continue
+            
+            # Position around the middle of the staff
+            y_idx = random.choice([1, 2, 3])
+            y_pos = string_y_positions[y_idx]
+            
+            draw_final.text((x_pos, y_pos), rest_char, fill=rest_color, font=r_font, anchor="mm")
 
 
 
