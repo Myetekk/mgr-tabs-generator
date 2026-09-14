@@ -8,21 +8,25 @@ import concurrent.futures
 from tqdm import tqdm
 from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
 
-# DATA_DIR = '..\\train_dataset_good'
-DATA_DIR = '..\\train_dataset_medium'
-# DATA_DIR = '..\\train_dataset_weak'
-
-GEN_NUMBER = 65000
+GEN_NUMBER = 1000
 
 
 class NotesGenerator:
 
 
 
-    def __init__(self):
+    def __init__(self, data_dir, noise_percentage=0.6, add_elem_percentage=0.8, time_elem_percentage=0.4):
         self.line_spacing = None
         self.chord_spacing = None
         self.notes = []
+
+        self.data_dir = data_dir
+        if not os.path.exists(self.data_dir):
+            os.makedirs(self.data_dir)
+
+        self.noise_percentage = noise_percentage
+        self.add_elem_percentage = add_elem_percentage
+        self.time_elem_percentage = time_elem_percentage
 
 
 
@@ -150,7 +154,7 @@ class NotesGenerator:
         self._draw_rests(draw_final, string_y_positions)
 
         # Draw the "current time" vertical line
-        if random.random() < 0.40:  self._draw_time_line(draw_final, max_x, string_y_positions)
+        self._draw_time_line(draw_final, max_x, string_y_positions)
 
         # Draw the actual note text and generate the label sequences
         stroke_width = random.choices([0, 1], weights=[0.3, 0.7])[0]
@@ -158,8 +162,8 @@ class NotesGenerator:
         labels_model_a, labels_model_b = self._draw_notes_and_get_labels(draw_final, width, height, stroke_width)
 
         # Apply visual distortions and save files
-        final_img = self.apply_noise(final_img, 0.3)
-        self.save_files(final_img, output_name, labels_model_a, labels_model_b)
+        final_img = self._apply_noise(final_img)
+        self._save_files(final_img, output_name, labels_model_a, labels_model_b)
 
 
 
@@ -208,24 +212,25 @@ class NotesGenerator:
                 num_vertical_lines += 1
                 current_prob /= 1.2
 
-            available_gaps = [int((i + 0.5) * self.chord_spacing) for i in range(1, max_x)]
-            num_vertical_lines = min(num_vertical_lines, len(available_gaps))
+            if random.random() < self.time_elem_percentage:
+                available_gaps = [int((i + 0.5) * self.chord_spacing) for i in range(1, max_x)]
+                num_vertical_lines = min(num_vertical_lines, len(available_gaps))
 
-            if num_vertical_lines > 0:
-                selected_gaps = sorted(random.sample(available_gaps, num_vertical_lines))
-                y_top, y_bottom = string_y_positions[0], string_y_positions[5]
+                if num_vertical_lines > 0:
+                    selected_gaps = sorted(random.sample(available_gaps, num_vertical_lines))
+                    y_top, y_bottom = string_y_positions[0], string_y_positions[5]
 
-                for gap_x in selected_gaps:
-                    if random.random() < 0.2:
-                        # Double barline: thin line + thick line
-                        thin_w = max(1, self.line_width)
-                        thick_w = thin_w + random.randint(1, 3)
-                        gap = thin_w + thick_w + random.randint(1, 3)
-                        draw_lines.line([(gap_x, y_top), (gap_x, y_bottom)], fill=self.line_color + (255,), width=thin_w)
-                        draw_lines.line([(gap_x + gap, y_top), (gap_x + gap, y_bottom)], fill=self.line_color + (255,), width=thick_w)
-                    else:
-                        draw_lines.line([(gap_x, y_top), (gap_x, y_bottom)], fill=self.line_color + (255,), width=self.line_width + random.randint(-1, 2))
-                    barline_x_positions.append(gap_x)
+                    for gap_x in selected_gaps:
+                        if random.random() < 0.2:
+                            # Double barline: thin line + thick line
+                            thin_w = max(1, self.line_width)
+                            thick_w = thin_w + random.randint(1, 3)
+                            gap = thin_w + thick_w + random.randint(1, 3)
+                            draw_lines.line([(gap_x, y_top), (gap_x, y_bottom)], fill=self.line_color + (255,), width=thin_w)
+                            draw_lines.line([(gap_x + gap, y_top), (gap_x + gap, y_bottom)], fill=self.line_color + (255,), width=thick_w)
+                        else:
+                            draw_lines.line([(gap_x, y_top), (gap_x, y_bottom)], fill=self.line_color + (255,), width=self.line_width + random.randint(-1, 2))
+                        barline_x_positions.append(gap_x)
 
         return barline_x_positions
 
@@ -250,27 +255,28 @@ class NotesGenerator:
 
     def _draw_highlight_markers(self, draw_marker, width, height, top_margin, bottom_margin):
         """Draws transparent highlight rectangles (markers) typical in scanned/annotated documents."""
-        if random.random() < 0.2:
-            num_highlights = random.randint(1, 2)
-            for _ in range(num_highlights):
-                hx_start = random.randint(int(self.chord_spacing), int(width * 0.7))
-                hx_end = hx_start + random.randint(int(self.chord_spacing), int(self.chord_spacing * 5))
+        if random.random() > self.time_elem_percentage/2: return
 
-                rand_color = random.random()
-                if rand_color < 0.4:
-                    h_color = [246+random.randint(-5,5), 247+random.randint(-5,5), 213+random.randint(-5,5)]
-                elif rand_color < 0.7:
-                    h_color = [220 + random.randint(-5, 5), 230 + random.randint(-5, 5), 245 + random.randint(-5, 5)]
-                else:
-                    h_color = [243+random.randint(-5,5), 232+random.randint(-5,5), 223+random.randint(-5,5)]
+        num_highlights = random.randint(1, 2)
+        for _ in range(num_highlights):
+            hx_start = random.randint(int(self.chord_spacing), int(width * 0.7))
+            hx_end = hx_start + random.randint(int(self.chord_spacing), int(self.chord_spacing * 5))
 
-                if random.random() < 0.5:
-                    hy_start, hy_end = 0, height
-                else:
-                    hy_start = top_margin - self.line_spacing * random.uniform(0, 3)
-                    hy_end = height - bottom_margin + self.line_spacing * random.uniform(0, 3)
+            rand_color = random.random()
+            if rand_color < 0.4:
+                h_color = [246+random.randint(-5,5), 247+random.randint(-5,5), 213+random.randint(-5,5)]
+            elif rand_color < 0.7:
+                h_color = [220 + random.randint(-5, 5), 230 + random.randint(-5, 5), 245 + random.randint(-5, 5)]
+            else:
+                h_color = [243+random.randint(-5,5), 232+random.randint(-5,5), 223+random.randint(-5,5)]
 
-                draw_marker.rectangle([hx_start, hy_start, hx_end, hy_end], fill=tuple(h_color))
+            if random.random() < 0.5:
+                hy_start, hy_end = 0, height
+            else:
+                hy_start = top_margin - self.line_spacing * random.uniform(0, 3)
+                hy_end = height - bottom_margin + self.line_spacing * random.uniform(0, 3)
+
+            draw_marker.rectangle([hx_start, hy_start, hx_end, hy_end], fill=tuple(h_color))
 
 
 
@@ -288,10 +294,11 @@ class NotesGenerator:
             measure_font = ImageFont.truetype("arial.ttf", m_size)
 
         for gap_x in barline_x_positions:
-            if random.random() < 0.4:
-                offset_x, offset_y = random.randint(-30, 0), random.randint(-10, 15)
-                draw_final.text((gap_x + offset_x, y_top + offset_y - self.line_spacing * 1.1), str(measure_counter), fill=measure_color, font=measure_font)
-                measure_counter += 1
+            if random.random() > self.time_elem_percentage: return
+
+            offset_x, offset_y = random.randint(-30, 0), random.randint(-10, 15)
+            draw_final.text((gap_x + offset_x, y_top + offset_y - self.line_spacing * 1.1), str(measure_counter), fill=measure_color, font=measure_font)
+            measure_counter += 1
 
 
 
@@ -300,6 +307,8 @@ class NotesGenerator:
         Grouped beam rendering. Walks through sorted X positions and connects adjacent
         note groups with vertical stems and horizontal bottom beams, resembling sheet music rhythm notation.
         """
+        if random.random() > self.add_elem_percentage: return
+
         sorted_x_positions = sorted(grouped_notes.keys())
         beam_color = tuple(max(0, min(255, c + random.randint(-3, 3))) for c in self.line_color)
 
@@ -362,49 +371,52 @@ class NotesGenerator:
 
     def _draw_articulations(self, draw_final, grouped_notes, string_y_positions):
         """Draws articulation marks (e.g. Palm Mutes, Harmonics, Bend arrows) above the staff."""
+        if random.random() > self.add_elem_percentage: return
+
         y_top = string_y_positions[0]
         articulations_color = tuple(max(0, min(255, c + random.randint(-3, 3))) for c in self.line_color)
 
         for x, group in grouped_notes.items():
-            if random.random() < 0.15:
-                art_text = random.choice([
-                    "P.M.", "H", "P", "C#5", "C5", "D5", "(E5)", "Dsus2", "Cmaj7", "B7sus4", "1/4", "1/2", "Full", "1 1/2", "PB", "T", "S", "sl.", "v", "vib", "Tr.", "harm.", "N.H.", "A.H.", "P.H.", "T.H.", "w/bar"
-                ])
+            if random.random() > 0.15: return
 
-                a_size = self.font_size * random.uniform(0.5, 1.3)
-                try:
-                    art_font = ImageFont.truetype(random.choice(self.fonts), a_size)
-                except:
-                    art_font = ImageFont.truetype("arial.ttf", a_size)
+            art_text = random.choice([
+                "P.M.", "H", "P", "C#5", "C5", "D5", "(E5)", "Dsus2", "Cmaj7", "B7sus4", "1/4", "1/2", "Full", "1 1/2", "PB", "T", "S", "sl.", "v", "vib", "Tr.", "harm.", "N.H.", "A.H.", "P.H.", "T.H.", "w/bar"
+            ])
 
-                x_art = x + self.chord_spacing * random.uniform(0.0, 1.0)
-                y_art = y_top - self.line_spacing * random.uniform(0.5, 5.5)
+            a_size = self.font_size * random.uniform(0.5, 1.3)
+            try:
+                art_font = ImageFont.truetype(random.choice(self.fonts), a_size)
+            except:
+                art_font = ImageFont.truetype("arial.ttf", a_size)
 
-                # P.M. optionally gets a trailing dashed line (e.g., "P.M. - - - -|")
-                if art_text == "P.M." and random.random() < 0.5:
-                    num_dashes = random.randint(2, 6)
-                    art_text = "P.M. " + "- " * num_dashes + "|"
+            x_art = x + self.chord_spacing * random.uniform(0.0, 1.0)
+            y_art = y_top - self.line_spacing * random.uniform(0.5, 5.5)
 
-                draw_final.text((x_art, y_art), art_text, fill=self.numbers_color, font=art_font, anchor="md")
+            # P.M. optionally gets a trailing dashed line (e.g., "P.M. - - - -|")
+            if art_text == "P.M." and random.random() < 0.5:
+                num_dashes = random.randint(2, 6)
+                art_text = "P.M. " + "- " * num_dashes + "|"
 
-                # Bend curves and arrows
-                if any(bend_type in art_text for bend_type in ["1/", "Full", "PB"]):
-                    top_note = min(group, key=lambda n: n['render_y'])
-                    x0, y0 = top_note['bbox'][2] + 2, top_note['render_y']
-                    x1, y1 = x_art + self.line_spacing * 0.2, y_art + 10
-                    cx, cy = x0 + self.line_spacing * 0.5, y0 - self.line_spacing * 0.2
+            draw_final.text((x_art, y_art), art_text, fill=self.numbers_color, font=art_font, anchor="md")
 
-                    pts = []
-                    for t in np.linspace(0, 1, 15):
-                        xt = (1 - t) ** 2 * x0 + 2 * (1 - t) * t * cx + t ** 2 * x1
-                        yt = (1 - t) ** 2 * y0 + 2 * (1 - t) * t * cy + t ** 2 * y1
-                        pts.append((xt, yt))
+            # Bend curves and arrows
+            if any(bend_type in art_text for bend_type in ["1/", "Full", "PB"]):
+                top_note = min(group, key=lambda n: n['render_y'])
+                x0, y0 = top_note['bbox'][2] + 2, top_note['render_y']
+                x1, y1 = x_art + self.line_spacing * 0.2, y_art + 10
+                cx, cy = x0 + self.line_spacing * 0.5, y0 - self.line_spacing * 0.2
 
-                    draw_final.line(pts, fill=articulations_color, width=max(1, self.line_width))
+                pts = []
+                for t in np.linspace(0, 1, 15):
+                    xt = (1 - t) ** 2 * x0 + 2 * (1 - t) * t * cx + t ** 2 * x1
+                    yt = (1 - t) ** 2 * y0 + 2 * (1 - t) * t * cy + t ** 2 * y1
+                    pts.append((xt, yt))
 
-                    # Arrow head
-                    aw, ah = self.line_spacing * 0.12, self.line_spacing * 0.15
-                    draw_final.polygon([(x1 - aw, y1 + ah), (x1, y1 - 2), (x1 + aw, y1 + ah - 2)], fill=articulations_color, width=max(1, self.line_width + random.randint(-1, 2)))
+                draw_final.line(pts, fill=articulations_color, width=max(1, self.line_width))
+
+                # Arrow head
+                aw, ah = self.line_spacing * 0.12, self.line_spacing * 0.15
+                draw_final.polygon([(x1 - aw, y1 + ah), (x1, y1 - 2), (x1 + aw, y1 + ah - 2)], fill=articulations_color, width=max(1, self.line_width + random.randint(-1, 2)))
 
 
 
@@ -413,6 +425,8 @@ class NotesGenerator:
         Draws bottom arcs (hammer-on / pull-off ties). Only connects two notes that are
         on the SAME string and where there is NO other note on ANY string between their positions.
         """
+        if random.random() > self.add_elem_percentage: return
+
         arc_width = max(1, 5)
         all_occupied_x = set(n['x_pos'] for n in self.notes)
         bottom_arcs_color = tuple(max(0, min(255, c + random.randint(-3, 3))) for c in self.line_color)
@@ -470,7 +484,7 @@ class NotesGenerator:
             draw_final.text((x, y), text, fill=self.numbers_color, font=self.font, anchor="mm", stroke_width=stroke_width, stroke_fill=self.numbers_color)
 
             # Draw Slide In effect randomly
-            if random.random() < 0.1:
+            if random.random() < self.add_elem_percentage/8:
                 slide_width = max(1, 5)
                 slide_color = tuple(max(0, min(255, c + random.randint(-3, 3))) for c in self.line_color)
                 y_offset = random.randint(-7, 7)
@@ -507,6 +521,8 @@ class NotesGenerator:
 
     def _draw_time_signatures(self, draw_final, string_y_positions):
         """Randomly draws a time signature (like 4/4) at the start of the staff."""
+        if random.random() > self.time_elem_percentage*2: return
+
         if getattr(self, 'has_time_sig', False):
             ts_top = random.choice(["2", "3", "4", "5", "6", "7", "9", "12"])
             ts_bottom = random.choice(["4", "8"])
@@ -526,6 +542,8 @@ class NotesGenerator:
 
     def _draw_rests(self, draw_final, string_y_positions):
         """Draws professional musical rests using the Segoe UI Symbol font."""
+        if random.random() > self.add_elem_percentage: return
+
         empty_cols = getattr(self, 'empty_columns_for_rests', [])
         for col_x in empty_cols:
             x_pos = col_x * self.chord_spacing
@@ -554,6 +572,8 @@ class NotesGenerator:
 
     def _draw_time_line(self, draw_final, max_x, string_y_positions):
         """Draws a vertical line representing the current playback time."""
+        if random.random() > self.time_elem_percentage: return
+
         time_x = random.randint(int(self.chord_spacing), int(max_x * self.chord_spacing))
         y_top = string_y_positions[0] - self.line_spacing * random.uniform(0.5, 3.0)
         y_bottom = string_y_positions[5] + self.line_spacing * random.uniform(0.5, 3.0)
@@ -567,53 +587,54 @@ class NotesGenerator:
 
 
 
-    def apply_noise(self, image, noise_percentage=0.5):
+    def _apply_noise(self, image):
         try:
-            if random.random() < noise_percentage:
+            if random.random() < self.noise_percentage:
                 enhancer = ImageEnhance.Brightness(image)
                 image = enhancer.enhance(random.uniform(0.7, 1.3))
 
-            if random.random() < noise_percentage:
+            if random.random() < self.noise_percentage:
                 enhancer = ImageEnhance.Contrast(image)
                 image = enhancer.enhance(random.uniform(0.7, 1.3))
 
-            if random.random() < noise_percentage:
+            if random.random() < self.noise_percentage:
                 np_image = np.array(image)
                 noise = np.random.normal(loc=0, scale=15, size=np_image.shape)
                 np_image = np.clip(np_image.astype('int16') + noise, 0, 255).astype('uint8')
                 image = Image.fromarray(np_image)
 
-            # if random.random() < noise_percentage:
-            #     np_image = np.array(image)
-            #     kernel_size = random.choice([1, 3, 5, 7])
-            #     kernel_motion_blur = np.zeros((kernel_size, kernel_size))
-            #     kernel_motion_blur[int((kernel_size - 1) / 2), :] = np.ones(kernel_size)
-            #     kernel_motion_blur /= kernel_size
-            #     np_image = cv2.filter2D(np_image, -1, kernel_motion_blur)
-            #     image = Image.fromarray(np_image)
-            #
-            # if random.random() < noise_percentage:
-            #     image = image.filter(ImageFilter.GaussianBlur(radius=random.uniform(0.5, 1.5)))
-            #
-            # if random.random() < noise_percentage:
-            #     buffer = io.BytesIO()
-            #     image.save(buffer, format="JPEG", quality=random.randint(10, 70))
-            #     buffer.seek(0)
-            #     image = Image.open(buffer).convert('RGB')
+            if self.noise_percentage > 0.3:
+                if random.random() < self.noise_percentage:
+                    np_image = np.array(image)
+                    kernel_size = random.choice([1, 3, 5, 7])
+                    kernel_motion_blur = np.zeros((kernel_size, kernel_size))
+                    kernel_motion_blur[int((kernel_size - 1) / 2), :] = np.ones(kernel_size)
+                    kernel_motion_blur /= kernel_size
+                    np_image = cv2.filter2D(np_image, -1, kernel_motion_blur)
+                    image = Image.fromarray(np_image)
+
+                if random.random() < self.noise_percentage:
+                    image = image.filter(ImageFilter.GaussianBlur(radius=random.uniform(0.5, 1.5)))
+
+                if random.random() < self.noise_percentage:
+                    buffer = io.BytesIO()
+                    image.save(buffer, format="JPEG", quality=random.randint(10, 70))
+                    buffer.seek(0)
+                    image = Image.open(buffer).convert('RGB')
 
         except Exception as e:
-            print(f"Error in apply_noise: {e}")
+            print(f"Error in _apply_noise: {e}")
 
         return image
 
 
 
-    def save_files(self, image, output_name, labels_model_a, labels_model_b):
+    def _save_files(self, image, output_name, labels_model_a, labels_model_b):
         try:
-            image.save(f"{DATA_DIR}\\{output_name}.png")
-            with open(f"{DATA_DIR}\\{output_name}_a.txt", "w") as f:
+            image.save(f"{self.data_dir}\\{output_name}.png")
+            with open(f"{self.data_dir}\\{output_name}_a.txt", "w") as f:
                 f.write("\n".join(labels_model_a))
-            with open(f"{DATA_DIR}\\{output_name}_b.txt", "w") as f:
+            with open(f"{self.data_dir}\\{output_name}_b.txt", "w") as f:
                 f.write(labels_model_b)
         except Exception as e:
             print(f"Error in save_files: {e}")
@@ -623,14 +644,22 @@ class NotesGenerator:
 
 
 if __name__ == "__main__":
-    if not os.path.exists(DATA_DIR):
-        os.makedirs(DATA_DIR)
+    generators = {
+        NotesGenerator('..\\train_set\\noiseH', noise_percentage=0.6),
+        NotesGenerator('..\\train_set\\noiseM', noise_percentage=0.3),
+        NotesGenerator('..\\train_set\\noiseL', noise_percentage=0.0),
+        NotesGenerator('..\\train_set\\addH', add_elem_percentage=0.8),
+        NotesGenerator('..\\train_set\\addM', add_elem_percentage=0.4),
+        NotesGenerator('..\\train_set\\addL', add_elem_percentage=0.0),
+        NotesGenerator('..\\train_set\\timeH', time_elem_percentage=0.4),
+        NotesGenerator('..\\train_set\\timeM', time_elem_percentage=0.2),
+        NotesGenerator('..\\train_set\\timeL', time_elem_percentage=0.0),
+    }
 
-    generator = NotesGenerator()
+    for generator in generators:
+        print(f"Starting the generation of {GEN_NUMBER} images in {generator.data_dir}...")
 
-    print(f"Starting the generation of {GEN_NUMBER} images in a process pool...")
+        with concurrent.futures.ProcessPoolExecutor(max_workers=8) as executor:
+            list(tqdm(executor.map(generator.generate_single_tab, range(GEN_NUMBER)), total=GEN_NUMBER))
 
-    with concurrent.futures.ProcessPoolExecutor(max_workers=8) as executor:
-        list(tqdm(executor.map(generator.generate_single_tab, range(GEN_NUMBER)), total=GEN_NUMBER))
-
-    print("\nGeneration completed!")
+        print("\nGeneration completed!\n\n")
