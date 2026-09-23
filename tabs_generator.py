@@ -8,7 +8,7 @@ import concurrent.futures
 from tqdm import tqdm
 from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
 
-GEN_NUMBER = 1000
+GEN_NUMBER = 65000
 
 
 class NotesGenerator:
@@ -645,15 +645,18 @@ class NotesGenerator:
 
 if __name__ == "__main__":
     generators = {
-        NotesGenerator('..\\train_set\\noiseH', noise_percentage=0.6),
-        NotesGenerator('..\\train_set\\noiseM', noise_percentage=0.3),
-        NotesGenerator('..\\train_set\\noiseL', noise_percentage=0.0),
-        NotesGenerator('..\\train_set\\addH', add_elem_percentage=0.8),
-        NotesGenerator('..\\train_set\\addM', add_elem_percentage=0.4),
-        NotesGenerator('..\\train_set\\addL', add_elem_percentage=0.0),
-        NotesGenerator('..\\train_set\\timeH', time_elem_percentage=0.4),
-        NotesGenerator('..\\train_set\\timeM', time_elem_percentage=0.2),
-        NotesGenerator('..\\train_set\\timeL', time_elem_percentage=0.0),
+        NotesGenerator('..\\train_set\\noise_MAX', noise_percentage=0.6),
+        NotesGenerator('..\\train_set\\noise_MID', noise_percentage=0.3),
+        NotesGenerator('..\\train_set\\noise_MIN', noise_percentage=0.0),
+        NotesGenerator('..\\train_set\\add_MAX', add_elem_percentage=0.8),
+        NotesGenerator('..\\train_set\\add_MID', add_elem_percentage=0.4),
+        NotesGenerator('..\\train_set\\add_MIN', add_elem_percentage=0.0),
+        NotesGenerator('..\\train_set\\time_MAX', time_elem_percentage=0.4),
+        NotesGenerator('..\\train_set\\time_MID', time_elem_percentage=0.2),
+        NotesGenerator('..\\train_set\\time_MIN', time_elem_percentage=0.0),
+        NotesGenerator('..\\train_set\\all_MAX', noise_percentage=0.6, add_elem_percentage=0.8, time_elem_percentage=0.4),
+        NotesGenerator('..\\train_set\\all_MID', noise_percentage=0.3, add_elem_percentage=0.4, time_elem_percentage=0.2),
+        NotesGenerator('..\\train_set\\all_MIN', noise_percentage=0.0, add_elem_percentage=0.0, time_elem_percentage=0.0),
     }
 
     for generator in generators:
